@@ -6,26 +6,25 @@ import passport from './config/passport.js';
 import authRoutes from "./routes/auth.js";
 import session from "express-session";
 
-dotenv.config(); // Load environment variables at the top
+dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3000;
 
 // CORS Middleware
 app.use(cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",  // Use CLIENT_URL from .env
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true
 }));
 
 // JSON Parser Middleware
 app.use(express.json());
 
-// Session Middleware (Fixed secret key issue)
+// Session Middleware
 app.use(session({
-    secret: process.env.SESSION_SECRET || "your_strong_secret_key", // Use SESSION_SECRET from .env
+    secret: process.env.SESSION_SECRET || "your_strong_secret_key",
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false }  // Set `true` in production with HTTPS
+    cookie: { secure: false }
 }));
 
 // Passport Middleware
@@ -35,12 +34,22 @@ app.use(passport.session());
 // Authentication Routes
 app.use('/auth', authRoutes);
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-    .then(() => console.log('✅ Connected to MongoDB successfully...'))
-    .catch(err => console.error('❌ Error connecting to MongoDB:', err));
+// Connect to MongoDB (Avoid multiple connections)
+let isConnected = false;
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`🚀 Server is running on port ${PORT}`);
-});
+async function connectDB() {
+    if (isConnected) return;
+    try {
+        await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+        console.log('✅ Connected to MongoDB successfully...');
+        isConnected = true;
+    } catch (err) {
+        console.error('❌ Error connecting to MongoDB:', err);
+    }
+}
+
+// Vercel Serverless Handler (No app.listen)
+export default async function handler(req, res) {
+    await connectDB();
+    return app(req, res);
+}
